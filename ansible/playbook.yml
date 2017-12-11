@@ -1,0 +1,7 @@
+---
+- hosts: all
+  tasks:
+      - name: Create File
+        file:
+            path : ~/hello_world
+            state: touch
