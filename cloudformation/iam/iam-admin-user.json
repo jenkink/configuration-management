@@ -1,0 +1,46 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description" : "Creates an IAM Admin User",
+  "Parameters" : {
+    "UserName": {
+      "Description": "Name of our Admin User",
+      "Type": "String",
+      "Default": "Admin"
+    }
+  },
+  "Resources": {
+    "Admin": {
+      "Type": "AWS::IAM::User",
+      "Properties": {
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AdministratorAccess"
+        ],
+        "Path": "/",
+        "UserName": { "Ref": "UserName" }
+      }
+    },
+    "myaccesskey": {
+      "Type": "AWS::IAM::AccessKey",
+      "Properties": {
+        "UserName": {
+          "Ref": "Admin"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "AccessKeyformyaccesskey": {
+      "Value": {
+        "Ref": "myaccesskey"
+      }
+    },
+    "SecretKeyformyaccesskey": {
+      "Value": {
+        "Fn::GetAtt": [
+          "myaccesskey",
+          "SecretAccessKey"
+        ]
+      }
+    }
+  }
+}

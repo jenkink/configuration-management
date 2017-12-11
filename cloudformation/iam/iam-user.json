@@ -1,0 +1,122 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Template to create regular users",
+  "Parameters" : {
+    "UserName": {
+      "Description": "Name of our User",
+      "Type": "String",
+      "Default": "User1"
+    },
+    "GroupName": {
+      "Description": "Group User belongs to",
+      "Type": "String",
+      "Default": "Group1"
+    },
+    "BucketName":{
+      "Description": "S3 Bucket User has access to",
+      "Type": "String",
+      "Default": "Bucket1"
+    }
+  },
+  "Resources": {
+    "RegUser": {
+      "Type": "AWS::IAM::User",
+      "Properties": {
+        "Path": "/",
+        "UserName": { "Ref": "UserName" }
+      }
+    },
+    "AccessKey": {
+      "Type": "AWS::IAM::AccessKey",
+      "Properties": {
+        "UserName": {
+          "Ref": "RegUser"
+        }
+      }
+    },
+    "ReadGroup": {
+      "Type": "AWS::IAM::Group",
+      "Properties": {
+        "GroupName": { "Ref": "GroupName" },
+        "Path": "/"
+      }
+    },
+    "ReadPolicy": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": "S3ReadPolicy",
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:ListBucket",
+                "s3:ListBucketVersions"
+              ],
+              "Resource": {
+                "Fn::Join":[
+                  "",
+                  [
+                    "arn:aws:s3:::",
+                    {
+                      "Ref":"BucketName"
+                    }
+                  ]
+                ]
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:GetObject",
+                "s3:GetObjectVersion"
+              ],
+              "Resource": {
+                "Fn::Join":[
+                  "",
+                  [
+                    "arn:aws:s3:::",
+                    {
+                      "Ref":"BucketName"
+                    },
+                    "/*"
+                  ]
+                ]
+              }
+            }
+          ]
+        },
+        "Groups": [
+          { "Ref": "GroupName" },
+          { "Ref": "ReadGroup" }
+        ]
+      }
+    },
+    "addUserToGroupPublicRead": {
+      "Type": "AWS::IAM::UserToGroupAddition",
+      "Properties": {
+        "GroupName": { "Ref": "GroupName" },
+        "Users": [
+          { "Ref": "UserName"},
+          { "Ref": "RegUser"}
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "AccessKeyforPublicAccessKey": {
+      "Value": {
+        "Ref": "AccessKey"
+      }
+    },
+    "SecretKeyforPublicAccessKey": {
+      "Value": {
+        "Fn::GetAtt": [
+          "AccessKey",
+          "SecretAccessKey"
+        ]
+      }
+    }
+  }
+}

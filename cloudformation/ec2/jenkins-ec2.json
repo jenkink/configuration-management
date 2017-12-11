@@ -1,0 +1,287 @@
+    {
+      "AWSTemplateFormatVersion": "2010-09-09",
+      "Description": "Template to create ec2 instances",
+      "Parameters": {
+        "KeyName": {
+          "Type": "AWS::EC2::KeyPair::KeyName",
+          "Default": "kj-ec2-labs",
+          "Description": "Name of an existing EC2 KeyPair. Instances will launch with this KeyPair."
+        },
+        "VPC": {
+          "Type": "AWS::EC2::VPC::Id",
+          "Description": "VPC-ID of your existing Virtual Private Cloud (VPC) where you want to depoy.",
+          "AllowedPattern": "vpc-[0-9a-z]{8}"
+        },
+        "Subnet": {
+          "Type": "AWS::EC2::Subnet::Id",
+          "Description": "Subnet-ID the existing subnet in your VPC where you want to deploy.",
+          "AllowedPattern": "subnet-[0-9a-z]{8}"
+        },
+        "BucketName": {
+          "Description": "S3 Bucket",
+          "Type": "String",
+          "Default": "Bucket1"
+        },
+        "InstanceType": {
+          "Type": "String",
+          "Default": "t2.micro",
+          "AllowedValues": [
+            "t2.micro"
+          ],
+          "Description": "EC2 instance type (e.g. t2.micro)"
+        },
+        "SecurityGroupId": {
+          "Type": "AWS::EC2::SecurityGroup::Id",
+          "Description": "Security group ID"
+        },
+        "Name": {
+          "Description": "Name of the agent",
+          "Type": "String",
+          "MinLength": "1",
+          "Default": "jenkins-agent-1"
+        }
+      },
+      "Resources": {
+        "JenkinsAgentRole": {
+          "Type": "AWS::IAM::Role",
+          "Properties": {
+            "AssumeRolePolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "AllowEc2ServiceToAssumeRole",
+                  "Effect": "Allow",
+                  "Action": [
+                    "sts:AssumeRole"
+                  ],
+                  "Principal": {
+                    "Service": [
+                      "ec2.amazonaws.com"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "S3Policy": {
+          "Type": "AWS::IAM::Policy",
+          "Properties": {
+            "PolicyName": "S3Policy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:ListBucket",
+                    "s3:ListBucketVersions",
+                    "s3:GetObject",
+                    "s3:GetObjectVersion",
+                    "s3:PutObject",
+                    "s3:DeleteObject"
+                  ],
+                  "Resource": "arn:aws:s3:::*"
+                }
+              ]
+            },
+            "Roles": [
+              {
+                "Ref": "JenkinsAgentRole"
+              }
+            ]
+          }
+        },
+        "InstanceProfile": {
+          "Type": "AWS::IAM::InstanceProfile",
+          "Properties": {
+            "Path": "/",
+            "Roles": [
+              {
+                "Ref": "JenkinsAgentRole"
+              }
+            ]
+          }
+        },
+        "JenkinsAgent": {
+          "Type": "AWS::EC2::Instance",
+          "Metadata": {
+            "AWS::CloudFormation::Init": {
+              "configSets": {
+                "SetupConfig": [
+                  "setup",
+                  "install"
+                ]
+              },
+              "setup": {
+                "files": {
+                  "/etc/cfn/cfn-hup.conf": {
+                    "content": {
+                      "Fn::Join": [
+                        "",
+                        [
+                          "[main]\n",
+                          "stack=",
+                          {
+                            "Ref": "AWS::StackId"
+                          },
+                          "\n",
+                          "region=",
+                          {
+                            "Ref": "AWS::Region"
+                          },
+                          "\n",
+                          "interval=1\n"
+                        ]
+                      ]
+                    },
+                    "mode": "000400",
+                    "owner": "root",
+                    "group": "root"
+                  },
+                  "/etc/systemd/system/cfn-hup.service": {
+                    "content": {
+                      "Fn::Join": [
+                        "",
+                        [
+                          "[Unit]\n",
+                          "Description=Cloud formation helper daemon\n",
+                          "[Service]\n",
+                          "ExecStart=/etc/init.d/cfn-hup -v\n",
+                          "Restart=always\n",
+                          "RestartSec=10s\n",
+                          "Type=notify\n",
+                          "NotifyAccess=all\n",
+                          "TimeoutStartSec=120\n",
+                          "TimeoutStopSec=15\n",
+                          "[Install]\n",
+                          "WantedBy=multi-user.target\n"
+                        ]
+                      ]
+                    },
+                    "mode": "000400",
+                    "owner": "root",
+                    "group": "root"
+                  },
+                  "/etc/cfn/hooks.d/cfn-auto-reloader.conf": {
+                    "content": {
+                      "Fn::Join": [
+                        "",
+                        [
+                          "[cfn-auto-reloader-hook]\n",
+                          "triggers=post.update\n",
+                          "path=Resources.JenkinsAgent.Metadata.AWS::CloudFormation::Init\n",
+                          "action=cfn-init -v ",
+                          "         --stack ",
+                          {
+                            "Ref": "AWS::StackName"
+                          },
+                          "         --resource JenkinsAgent ",
+                          "         --configsets SetupConfig ",
+                          "         --region ",
+                          {
+                            "Ref": "AWS::Region"
+                          },
+                          "\n",
+                          "runas=root\n"
+                        ]
+                      ]
+                    }
+                  }
+                }
+              },
+              "install": {
+                "files": {
+                  "/home/ec2-user/setup-puppet.sh": {
+                    "content": {
+                      "Fn::Join": [
+                        "",
+                        [
+                          "#!/bin/bash\n",
+                          "yum update -y\n",
+                          "yum install -y puppet\n",
+                          "echo '54.227.196.148  puppet' >> /etc/hosts\n",
+                          "service puppet start\n",
+                          "chkconfig --add puppet\n"
+                        ]
+                      ]
+                    },
+                    "mode": "000755",
+                    "owner": "root",
+                    "group": "root"
+                  }
+                },
+                "commands": {
+                  "01_run": {
+                    "command": {
+                      "Fn::Join": [
+                        "",
+                        [
+                          "/bin/bash /home/ec2-user/setup-puppet.sh > home/ec2-user/out.txt"
+                        ]
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "Properties": {
+            "InstanceType": {
+              "Ref": "InstanceType"
+            },
+            "ImageId": "ami-92e280e8",
+            "KeyName": {
+              "Ref": "KeyName"
+            },
+            "SecurityGroupIds": [
+              {
+                "Ref": "SecurityGroupId"
+              }
+            ],
+            "SubnetId": {
+              "Ref": "Subnet"
+            },
+            "IamInstanceProfile": {
+              "Ref": "InstanceProfile"
+            },
+            "Tags": [
+              {
+                "Key": "Name",
+                "Value": {
+                  "Ref": "Name"
+                }
+              },
+              {
+                "Key": "environment",
+                "Value": "testing"
+              }
+            ],
+            "UserData": {
+              "Fn::Base64": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "#!/bin/bash -xe\n",
+                    "yum install -y aws-cfn-bootstrap\n",
+                    "# Install the files and packages from the metadata\n",
+                    "/opt/aws/bin/cfn-init -v ",
+                    "         --stack ",
+                    {
+                      "Ref": "AWS::StackName"
+                    },
+                    "         --resource JenkinsAgent ",
+                    "         --configsets SetupConfig ",
+                    "         --region ",
+                    {
+                      "Ref": "AWS::Region"
+                    },
+                    "\n"
+                  ]
+                ]
+              }
+            }
+          }
+        }
+      }
+    }

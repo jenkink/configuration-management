@@ -1,0 +1,30 @@
+    {
+        "AWSTemplateFormatVersion": "2010-09-09",
+        "Description": "Template to create a cloudformation admin role",
+        "Parameters": {},
+        "Resources": {
+            "CloudformationRole": {
+                "Type": "AWS::IAM::Role",
+                "Properties": {
+                    "Path": "/",
+                    "ManagedPolicyArns": [
+                        "arn:aws:iam::aws:policy/AdministratorAccess"
+                    ],
+                    "AssumeRolePolicyDocument": {
+                        "Version": "2012-10-17",
+                        "Statement": {
+                            "Action": [
+                                "sts:AssumeRole"
+                            ],
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "cloudformation.amazonaws.com"
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
