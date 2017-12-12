@@ -17,6 +17,11 @@
           "Description": "Subnet-ID the existing subnet in your VPC where you want to deploy.",
           "AllowedPattern": "subnet-[0-9a-z]{8}"
         },
+        "AMI": {
+          "Description": "AMI ID uses the Ubuntu Image by Default",
+          "Type": "String",
+          "Default": "ami-aa2ea6d0"
+        },
         "BucketName": {
           "Description": "S3 Bucket",
           "Type": "String",
@@ -192,17 +197,19 @@
               },
               "install": {
                 "files": {
-                  "/home/ec2-user/setup-puppet.sh": {
+                  "/home/ubuntu/setup-puppet-agent.sh": {
                     "content": {
                       "Fn::Join": [
                         "",
                         [
                           "#!/bin/bash\n",
-                          "yum update -y\n",
-                          "yum install -y puppet\n",
-                          "echo '<SERVER_IP_ADDR>  puppet' >> /etc/hosts\n",
-                          "service puppet start\n",
-                          "chkconfig --add puppet\n"
+                          "wget https://apt.puppetlabs.com/puppet5-release-xenial.deb\n",
+                          "dpkg -i puppet5-release-xenial.deb\n",
+                          "apt-get update\n",
+                          "apt-get install -y puppet-agent\n",
+                          "echo '54.205.80.128  puppet' >> /etc/hosts\n",
+                          "systemctl start puppet\n",
+                          "systemctl enable puppet\n"
                         ]
                       ]
                     },
@@ -217,7 +224,7 @@
                       "Fn::Join": [
                         "",
                         [
-                          "/bin/bash /home/ec2-user/setup-puppet.sh > home/ec2-user/out.txt"
+                          "/bin/bash /home/ubuntu/setup-puppet-agent.sh > home/ubuntu/out.txt"
                         ]
                       ]
                     }
@@ -230,7 +237,9 @@
             "InstanceType": {
               "Ref": "InstanceType"
             },
-            "ImageId": "ami-92e280e8",
+            "ImageId": {
+              "Ref": "AMI"
+            },
             "KeyName": {
               "Ref": "KeyName"
             },
@@ -263,20 +272,30 @@
                   "",
                   [
                     "#!/bin/bash -xe\n",
-                    "yum install -y aws-cfn-bootstrap\n",
-                    "# Install the files and packages from the metadata\n",
-                    "/opt/aws/bin/cfn-init -v ",
-                    "         --stack ",
-                    {
-                      "Ref": "AWS::StackName"
-                    },
-                    "         --resource JenkinsAgent ",
-                    "         --configsets SetupConfig ",
-                    "         --region ",
+                    "apt-get update\n",
+                    "apt-get -y install python-setuptools\n",
+                    "apt-get install -y python-pip libssl-dev libffi-dev\n",
+                    "pip install pyopenssl ndg-httpsclient pyasn1\n",
+                    "apt-get -y install awscli\n",
+                    "apt-get -y install libwww-perl libdatetime-perl\n",
+                    "easy_install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz\n",
+                    "cfn-init -v --region ",
                     {
                       "Ref": "AWS::Region"
                     },
-                    "\n"
+                    "    -s ",
+                    {
+                      "Ref": "AWS::StackId"
+                    },
+                    " -r JenkinsAgent ",
+                    " -c SetupConfig ",
+                    "   --verbose > ~/cfn-init.log 2>&1\n",
+                    "# Start up the cfn-hup daemon to listen for changes to the Web Server metadata\n",
+                    "cp /usr/local/bin/cfn-hup /etc/init.d/cfn-hup\n",
+                    "/etc/init.d/update-rc.d cfn-hup defaults\n",
+                    "chmod +x /etc/init.d/cfn-hup\n",
+                    "systemctl enable cfn-hup\n",
+                    "cfn-hup -v || error_exit\n"
                   ]
                 ]
               }

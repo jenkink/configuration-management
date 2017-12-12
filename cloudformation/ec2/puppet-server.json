@@ -203,8 +203,8 @@
                                             "",
                                             [
                                                 "#!/bin/bash\n",
-                                                "curl -O https://apt.puppetlabs.com/puppetlabs-release-pc1-xenial.deb\n",
-                                                "sudo dpkg -i puppetlabs-release-pc1-xenial.deb\n",
+                                                "wget https://apt.puppetlabs.com/puppet5-release-xenial.deb\n",
+                                                "dpkg -i puppet5-release-xenial.deb\n",
                                                 "apt-get update\n",
                                                 "apt-get install -y puppetserver\n",
                                                 "ufw allow 8140\n",
