@@ -1,0 +1,306 @@
+    {
+        "AWSTemplateFormatVersion": "2010-09-09",
+        "Description": "Template to create the puppet server",
+        "Parameters": {
+            "KeyName": {
+                "Type": "AWS::EC2::KeyPair::KeyName",
+                "Default": "kj-ec2-labs",
+                "Description": "Name of an existing EC2 KeyPair. Instances will launch with this KeyPair."
+            },
+            "VPC": {
+                "Type": "AWS::EC2::VPC::Id",
+                "Description": "VPC-ID of your existing Virtual Private Cloud (VPC) where you want to depoy.",
+                "AllowedPattern": "vpc-[0-9a-z]{8}"
+            },
+            "Subnet": {
+                "Type": "AWS::EC2::Subnet::Id",
+                "Description": "Subnet-ID the existing subnet in your VPC where you want to deploy.",
+                "AllowedPattern": "subnet-[0-9a-z]{8}"
+            },
+            "AMI": {
+                "Description": "AMI ID uses the Ubuntu Image by Default",
+                "Type": "String",
+                "Default": "ami-aa2ea6d0"
+            },
+            "BucketName": {
+                "Description": "S3 Bucket",
+                "Type": "String",
+                "Default": "Bucket1"
+            },
+            "InstanceType": {
+                "Type": "String",
+                "Default": "t2.micro",
+                "AllowedValues": [
+                    "t2.micro"
+                ],
+                "Description": "EC2 instance type (e.g. t2.micro)"
+            },
+            "SecurityGroupId": {
+                "Type": "AWS::EC2::SecurityGroup::Id",
+                "Description": "Security group ID"
+            },
+            "Name": {
+                "Description": "Name of the Server",
+                "Type": "String",
+                "MinLength": "1",
+                "Default": "puppet-server"
+            }
+        },
+        "Resources": {
+            "PuppetServerRole": {
+                "Type": "AWS::IAM::Role",
+                "Properties": {
+                    "AssumeRolePolicyDocument": {
+                        "Version": "2012-10-17",
+                        "Statement": [
+                            {
+                                "Sid": "AllowEc2ServiceToAssumeRole",
+                                "Effect": "Allow",
+                                "Action": [
+                                    "sts:AssumeRole"
+                                ],
+                                "Principal": {
+                                    "Service": [
+                                        "ec2.amazonaws.com"
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                }
+            },
+            "S3Policy": {
+                "Type": "AWS::IAM::Policy",
+                "Properties": {
+                    "PolicyName": "S3Policy",
+                    "PolicyDocument": {
+                        "Version": "2012-10-17",
+                        "Statement": [
+                            {
+                                "Effect": "Allow",
+                                "Action": [
+                                    "s3:ListBucket",
+                                    "s3:ListBucketVersions",
+                                    "s3:GetObject",
+                                    "s3:GetObjectVersion",
+                                    "s3:PutObject",
+                                    "s3:DeleteObject"
+                                ],
+                                "Resource": "arn:aws:s3:::*"
+                            }
+                        ]
+                    },
+                    "Roles": [
+                        {
+                            "Ref": "PuppetServerRole"
+                        }
+                    ]
+                }
+            },
+            "InstanceProfile": {
+                "Type": "AWS::IAM::InstanceProfile",
+                "Properties": {
+                    "Path": "/",
+                    "Roles": [
+                        {
+                            "Ref": "PuppetServerRole"
+                        }
+                    ]
+                }
+            },
+            "PuppetServer": {
+                "Type": "AWS::EC2::Instance",
+                "Metadata": {
+                    "AWS::CloudFormation::Init": {
+                        "configSets": {
+                            "SetupConfig": [
+                                "setup",
+                                "install"
+                            ]
+                        },
+                        "setup": {
+                            "files": {
+                                "/etc/cfn/cfn-hup.conf": {
+                                    "content": {
+                                        "Fn::Join": [
+                                            "",
+                                            [
+                                                "[main]\n",
+                                                "stack=",
+                                                {
+                                                    "Ref": "AWS::StackId"
+                                                },
+                                                "\n",
+                                                "region=",
+                                                {
+                                                    "Ref": "AWS::Region"
+                                                },
+                                                "\n",
+                                                "interval=1\n"
+                                            ]
+                                        ]
+                                    },
+                                    "mode": "000400",
+                                    "owner": "root",
+                                    "group": "root"
+                                },
+                                "/etc/systemd/system/cfn-hup.service": {
+                                    "content": {
+                                        "Fn::Join": [
+                                            "",
+                                            [
+                                                "[Unit]\n",
+                                                "Description=Cloud formation helper daemon\n",
+                                                "[Service]\n",
+                                                "ExecStart=/etc/init.d/cfn-hup -v\n",
+                                                "Restart=always\n",
+                                                "RestartSec=10s\n",
+                                                "Type=notify\n",
+                                                "NotifyAccess=all\n",
+                                                "TimeoutStartSec=120\n",
+                                                "TimeoutStopSec=15\n",
+                                                "[Install]\n",
+                                                "WantedBy=multi-user.target\n"
+                                            ]
+                                        ]
+                                    },
+                                    "mode": "000400",
+                                    "owner": "root",
+                                    "group": "root"
+                                },
+                                "/etc/cfn/hooks.d/cfn-auto-reloader.conf": {
+                                    "content": {
+                                        "Fn::Join": [
+                                            "",
+                                            [
+                                                "[cfn-auto-reloader-hook]\n",
+                                                "triggers=post.update\n",
+                                                "path=Resources.PuppetServer.Metadata.AWS::CloudFormation::Init\n",
+                                                "action=cfn-init -v ",
+                                                "         --stack ",
+                                                {
+                                                    "Ref": "AWS::StackName"
+                                                },
+                                                "         --resource PuppetServer ",
+                                                "         --configsets SetupConfig ",
+                                                "         --region ",
+                                                {
+                                                    "Ref": "AWS::Region"
+                                                },
+                                                "\n",
+                                                "runas=root\n"
+                                            ]
+                                        ]
+                                    }
+                                }
+                            }
+                        },
+                        "install": {
+                            "files": {
+                                "/home/ubuntu/setup-puppet-server.sh": {
+                                    "content": {
+                                        "Fn::Join": [
+                                            "",
+                                            [
+                                                "#!/bin/bash\n",
+                                                "curl -O https://apt.puppetlabs.com/puppetlabs-release-pc1-xenial.deb\n",
+                                                "sudo dpkg -i puppetlabs-release-pc1-xenial.deb\n",
+                                                "apt-get update\n",
+                                                "apt-get install -y puppetserver\n",
+                                                "ufw allow 8140\n",
+                                                "systemctl start puppetserver\n",
+                                                "systemctl enable puppetserver\n"
+                                            ]
+                                        ]
+                                    },
+                                    "mode": "000755",
+                                    "owner": "root",
+                                    "group": "root"
+                                }
+                            },
+                            "commands": {
+                                "01_run": {
+                                    "command": {
+                                        "Fn::Join": [
+                                            "",
+                                            [
+                                                "/bin/bash /home/ubuntu/setup-puppet-server.sh > home/ubuntu/out.txt"
+                                            ]
+                                        ]
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "Properties": {
+                    "InstanceType": {
+                        "Ref": "InstanceType"
+                    },
+                    "ImageId": {
+                        "Ref": "AMI"
+                    },
+                    "KeyName": {
+                        "Ref": "KeyName"
+                    },
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "SecurityGroupId"
+                        }
+                    ],
+                    "SubnetId": {
+                        "Ref": "Subnet"
+                    },
+                    "IamInstanceProfile": {
+                        "Ref": "InstanceProfile"
+                    },
+                    "Tags": [
+                        {
+                            "Key": "Name",
+                            "Value": {
+                                "Ref": "Name"
+                            }
+                        },
+                        {
+                            "Key": "environment",
+                            "Value": "testing"
+                        }
+                    ],
+                    "UserData": {
+                        "Fn::Base64": {
+                            "Fn::Join": [
+                                "",
+                                [
+                                    "#!/bin/bash -xe\n",
+                                    "apt-get update\n",
+                                    "apt-get -y install python-setuptools\n",
+                                    "apt-get install -y python-pip libssl-dev libffi-dev\n",
+                                    "pip install pyopenssl ndg-httpsclient pyasn1\n",
+                                    "apt-get -y install awscli\n",
+                                    "apt-get -y install libwww-perl libdatetime-perl\n",
+                                    "easy_install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz\n",
+                                    "cfn-init -v --region ",
+                                    {
+                                        "Ref": "AWS::Region"
+                                    },
+                                    "    -s ",
+                                    {
+                                        "Ref": "AWS::StackId"
+                                    },
+                                    " -r PuppetServer ",
+                                    " -c SetupConfig ",
+                                    "   --verbose > ~/cfn-init.log 2>&1\n",
+                                    "# Start up the cfn-hup daemon to listen for changes to the Web Server metadata\n",
+                                    "cp /usr/local/bin/cfn-hup /etc/init.d/cfn-hup\n",
+                                    "/etc/init.d/update-rc.d cfn-hup defaults\n",
+                                    "chmod +x /etc/init.d/cfn-hup\n",
+                                    "systemctl enable cfn-hup\n",
+                                    "cfn-hup -v || error_exit\n"
+                                ]
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+    }

@@ -200,7 +200,7 @@
                           "#!/bin/bash\n",
                           "yum update -y\n",
                           "yum install -y puppet\n",
-                          "echo '54.227.196.148  puppet' >> /etc/hosts\n",
+                          "echo '<SERVER_IP_ADDR>  puppet' >> /etc/hosts\n",
                           "service puppet start\n",
                           "chkconfig --add puppet\n"
                         ]
