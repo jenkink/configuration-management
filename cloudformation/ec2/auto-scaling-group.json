@@ -1,0 +1,241 @@
+    {
+        "AWSTemplateFormatVersion": "2010-09-09",
+        "Description": "Template to create ec2 instances",
+        "Parameters": {
+            "KeyName": {
+                "Type": "AWS::EC2::KeyPair::KeyName",
+                "Default": "kj-ec2-labs",
+                "Description": "Name of an existing EC2 KeyPair. Instances will launch with this KeyPair."
+            },
+            "VPC": {
+                "Type": "AWS::EC2::VPC::Id",
+                "Description": "VPC-ID of your existing Virtual Private Cloud (VPC) where you want to depoy.",
+                "AllowedPattern": "vpc-[0-9a-z]{8}"
+            },
+            "Subnet1": {
+                "Type": "AWS::EC2::Subnet::Id",
+                "Description": "Subnet-ID the existing subnet in your VPC where you want to deploy.",
+                "AllowedPattern": "subnet-[0-9a-z]{8}"
+            },
+            "Subnet2": {
+                "Type": "AWS::EC2::Subnet::Id",
+                "Description": "Subnet-ID the existing subnet in your VPC where you want to deploy.",
+                "AllowedPattern": "subnet-[0-9a-z]{8}"
+            },
+            "AMI": {
+                "Description": "AMI ID uses the Ubuntu Image by Default",
+                "Type": "String",
+                "Default": "ami-aa2ea6d0"
+            },
+            "InstanceType": {
+                "Type": "String",
+                "Default": "t2.micro",
+                "AllowedValues": [
+                    "t2.micro"
+                ],
+                "Description": "EC2 instance type (e.g. t2.micro)"
+            },
+            "SecurityGroupId": {
+                "Type": "AWS::EC2::SecurityGroup::Id",
+                "Description": "Security group ID"
+            }
+        },
+        "Resources": {
+            "LoadBalancer": {
+                "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+                "Properties": {
+                    "Name": "SimpleLoadBalancer",
+                    "Scheme": "internet-facing",
+                    "Subnets": [
+                        {
+                            "Ref": "Subnet1"
+                        },
+                        {
+                            "Ref": "Subnet2"
+                        }
+                    ],
+                    "LoadBalancerAttributes": [
+                        {
+                            "Key": "idle_timeout.timeout_seconds",
+                            "Value": "50"
+                        }
+                    ],
+                    "SecurityGroups": [
+                        {
+                            "Ref": "SecurityGroupId"
+                        }
+                    ],
+                    "Tags": [
+                        {
+                            "Key": "Name",
+                            "Value": "MyLB"
+                        }
+                    ],
+                    "Type": "application",
+                    "IpAddressType": "ipv4"
+                }
+            },
+            "LaunchConfig": {
+                "Type": "AWS::AutoScaling::LaunchConfiguration",
+                "Properties": {
+                    "ImageId": {
+                        "Ref": "AMI"
+                    },
+                    "SecurityGroups": [
+                        {
+                            "Ref": "SecurityGroupId"
+                        }
+                    ],
+                    "InstanceType": {
+                        "Ref": "InstanceType"
+                    },
+                    "BlockDeviceMappings": [
+                        {
+                            "DeviceName": "/dev/sdk",
+                            "Ebs": {
+                                "VolumeSize": "50"
+                            }
+                        },
+                        {
+                            "DeviceName": "/dev/sdc",
+                            "VirtualName": "ephemeral0"
+                        }
+                    ]
+                }
+            },
+            "NotificationTopic": {
+                "Type": "AWS::SNS::Topic",
+                "Properties": {
+                    "DisplayName": "AutoScalingNotifications",
+                    "TopicName": "AutoScalingNotifications",
+                    "Subscription": [
+                        {
+                            "Endpoint": {
+                                "Fn::GetAtt": "AutoScalingNotifications.Arn"
+                            },
+                            "Protocol": "lambda"
+                        }
+                    ]
+                }
+            },
+            "ServerGroup": {
+                "Type": "AWS::AutoScaling::AutoScalingGroup",
+                "DependsOn": "LoadBalancer",
+                "Properties": {
+                    "AvailabilityZones": {
+                        "Fn::GetAZs": ""
+                    },
+                    "LaunchConfigurationName": {
+                        "Ref": "LaunchConfig"
+                    },
+                    "MinSize": "2",
+                    "MaxSize": "4",
+                    "NotificationConfiguration": {
+                        "TopicARN": {
+                            "Ref": "NotificationTopic"
+                        },
+                        "NotificationTypes": [
+                            "autoscaling:EC2_INSTANCE_LAUNCH",
+                            "autoscaling:EC2_INSTANCE_LAUNCH_ERROR",
+                            "autoscaling:EC2_INSTANCE_TERMINATE",
+                            "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
+                        ]
+                    }
+                },
+                "TargetGroupARNs": [
+                    {
+                        "Ref": "LoadBalancer"
+                    }
+                ]
+            },
+            "CreationPolicy": {
+                "ResourceSignal": {
+                    "Timeout": "PT15M",
+                    "Count": "1"
+                }
+            },
+            "UpdatePolicy": {
+                "AutoScalingRollingUpdate": {
+                    "MinInstancesInService": "1",
+                    "MaxBatchSize": "1",
+                    "PauseTime": "PT15M",
+                    "WaitOnResourceSignals": "true"
+                }
+            }
+        },
+        "ScaleUpPolicy": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "ServerGroup"
+                },
+                "Cooldown": "1",
+                "ScalingAdjustment": "1"
+            }
+        },
+        "ScaleDownPolicy": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "ServerGroup"
+                },
+                "Cooldown": "1",
+                "ScalingAdjustment": "-1"
+            }
+        },
+        "CPUAlarmHigh": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "EvaluationPeriods": "1",
+                "Statistic": "Average",
+                "Threshold": "90",
+                "AlarmDescription": "Alarm if CPU too high or metric disappears indicating instance is down",
+                "Period": "300",
+                "AlarmActions": [
+                    {
+                        "Ref": "ScaleUpPolicy"
+                    }
+                ],
+                "Namespace": "AWS/EC2",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "ServerGroup"
+                        }
+                    }
+                ],
+                "ComparisonOperator": "GreaterThanThreshold",
+                "MetricName": "CPUUtilization"
+            }
+        },
+        "CPUAlarmLow": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "EvaluationPeriods": "1",
+                "Statistic": "Average",
+                "Threshold": "10",
+                "AlarmDescription": "Alarm if CPU too Low indicating not enough usage scale down for cost",
+                "Period": "300",
+                "AlarmActions": [
+                    {
+                        "Ref": "ScaleDownPolicy"
+                    }
+                ],
+                "Namespace": "AWS/EC2",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "ServerGroup"
+                        }
+                    }
+                ],
+                "ComparisonOperator": "LessThanThreshold",
+                "MetricName": "CPUUtilization"
+            }
+        }
+    }
+}
