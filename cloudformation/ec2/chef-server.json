@@ -213,6 +213,30 @@
                                     "mode": "000755",
                                     "owner": "root",
                                     "group": "root"
+                                },
+                                "/home/ubuntu/setup-dynamo.sh": {
+                                    "content": {
+                                        "Fn::Join": [
+                                            "",
+                                            [
+                                                "#!/bin/bash\n",
+                                                "apt-get update -y\n",
+                                                "apt-get install httpd24 php56 git -y\n",
+                                                "systemctl start httpd\n",
+                                                "systemctl enable httpd\n",
+                                                "cd /var/www/html\n",
+                                                "echo '<?php phpinfo();?>' > test.php\n",
+                                                "git clone https://github.com/acloudguru/dynamodb\n",
+                                                "curl -sS https://getcomposer.org/installer | php\n",
+                                                "php composer.phar require aws/aws-sdk-php\n",
+                                                "php -f dynamodb/createtables.php\n",
+                                                "php -f dynamodb/uploaddata.php\n"
+                                            ]
+                                        ]
+                                    },
+                                    "mode": "000755",
+                                    "owner": "root",
+                                    "group": "root"
                                 }
                             },
                             "commands": {
@@ -221,7 +245,8 @@
                                         "Fn::Join": [
                                             "",
                                             [
-                                                "/bin/bash /home/ubuntu/setup-chef.sh > home/ubuntu/out.txt"
+                                                "/bin/bash /home/ubuntu/setup-chef.sh > home/ubuntu/out.txt",
+                                                "/bin/bash /home/ubuntu/setup-dynamo.sh > home/ubuntu/out-dynamo.txt"
                                             ]
                                         ]
                                     }
