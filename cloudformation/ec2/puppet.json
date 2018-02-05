@@ -1,0 +1,182 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Entry Point for the Puppet Stack.",
+    "Parameters": {
+        "KeyPairName": {
+            "Description": "Public/private key pair",
+            "Type": "AWS::EC2::KeyPair::KeyName"
+        },
+        "SubnetCIDR": {
+            "Description": "CIDR block for the public subnet",
+            "Type": "String",
+            "Default": "10.0.0.0/19",
+            "AllowedPattern": "[a-zA-Z0-9]+\\..+"
+        },
+        "RemoteAdminCIDR": {
+            "Description": "CIDR block or IP for SSH access Note: a value of 0.0.0.0/0 will allow access from ANY ip address",
+            "Type": "String",
+            "AllowedPattern": "[a-zA-Z0-9]+\\..+"
+        },
+        "VPCCIDR": {
+            "Description": "CIDR block for the VPC",
+            "Type": "String",
+            "Default": "10.0.0.0/16",
+            "AllowedPattern": "[a-zA-Z0-9]+\\..+"
+        },
+        "PuppetMasterIP": {
+            "Description": "IP for the Puppet master",
+            "Type": "String",
+            "Default": "10.0.0.10"
+        },
+        "PuppetAgentLinuxIP": {
+            "Description": "IP for the Linux Puppet agent",
+            "Type": "String",
+            "Default": "10.0.0.11"
+        },
+        "BucketName": {
+            "Type": "String",
+            "AllowedPattern": "^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$",
+            "ConstraintDescription": "Quick Start bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).",
+            "Default": "kj-profile",
+            "Description": "S3 bucket name for the Quick Start assets. Quick Start bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-)."
+        },
+        "KeyPrefix": {
+            "Type": "String",
+            "AllowedPattern": "^[0-9a-zA-Z-/]*$",
+            "ConstraintDescription": "Quick Start key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).",
+            "Default": "cf-templates/puppet",
+            "Description": "S3 key prefix for the Quick Start assets. Quick Start key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/)."
+        }
+    },
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Security Configuration"
+                    },
+                    "Parameters": [
+                        "KeyPairName",
+                        "RemoteAdminCIDR"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "AWS Quick Start Configuration"
+                    },
+                    "Parameters": [
+                        "BucketName",
+                        "KeyPrefix"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Network Configuration"
+                    },
+                    "Parameters": [
+                        "VPCCIDR",
+                        "SubnetCIDR",
+                        "PuppetMasterIP",
+                        "PuppetAgentLinuxIP"
+                    ]
+                }
+            ],
+            "ParameterLabels": {
+                "KeyPairName": {
+                    "default": "Select a key pair:"
+                },
+                "RemoteAdminCIDR": {
+                    "default": "Source IP for remote access (e.g., 1.1.1.1/32):"
+                },
+                "VPCCIDR": {
+                    "default": "CIDR range for your VPC:"
+                },
+                "SubnetCIDR": {
+                    "default": "CIDR range for the subnet in your VPC:"
+                },
+                "PuppetMasterIP": {
+                    "default": "IP address for the Puppet master:"
+                },
+                "PuppetAgentLinuxIP": {
+                    "default": "IP address for the Linux Puppet agent:"
+                },
+                "BucketName": {
+                    "default": "Quick Start S3 Bucket Name:"
+                },
+                "KeyPrefix": {
+                    "default": "Quick Start S3 Key Prefix:"
+                }
+            }
+        }
+    },
+    "Resources": {
+        "VPCStack": {
+            "Type": "AWS::CloudFormation::Stack",
+            "Properties": {
+                "TemplateURL": {
+                    "Fn::Sub": "https://s3.amazonaws.com/${BucketName}/${KeyPrefix}/vpc-stack.json"
+                },
+                "Parameters": {
+                    "KeyPairName": {
+                        "Ref": "KeyPairName"
+                    },
+                    "SubnetCIDR": {
+                        "Ref": "SubnetCIDR"
+                    },
+                    "VPCCIDR": {
+                        "Ref": "VPCCIDR"
+                    },
+                    "PuppetMasterIP": {
+                        "Ref": "PuppetMasterIP"
+                    },
+                    "PuppetAgentLinuxIP": {
+                        "Ref": "PuppetAgentLinuxIP"
+                    }
+                }
+            }
+        },
+        "InstanceStack": {
+            "Type": "AWS::CloudFormation::Stack",
+            "Properties": {
+                "TemplateURL": {
+                    "Fn::Sub": "https://s3.amazonaws.com/${BucketName}/${KeyPrefix}/puppet-instances.json"
+                },
+                "Parameters": {
+                    "KeyPairName": {
+                        "Ref": "KeyPairName"
+                    },
+                    "SubnetId": {
+                        "Fn::GetAtt": [
+                            "VPCStack",
+                            "Outputs.SubnetId"
+                        ]
+                    },
+                    "VPC": {
+                        "Fn::GetAtt": [
+                            "VPCStack",
+                            "Outputs.VPC"
+                        ]
+                    },
+                    "VPCCIDR": {
+                        "Ref": "VPCCIDR"
+                    },
+                    "PuppetMasterIP": {
+                        "Ref": "PuppetMasterIP"
+                    },
+                    "PuppetAgentLinuxIP": {
+                        "Ref": "PuppetAgentLinuxIP"
+                    },
+                    "RemoteAdminCIDR": {
+                        "Ref": "RemoteAdminCIDR"
+                    },
+                    "BucketName": {
+                        "Ref": "BucketName"
+                    },
+                    "KeyPrefix": {
+                        "Ref": "KeyPrefix"
+                    }
+                }
+            }
+        }
+    }
+}
