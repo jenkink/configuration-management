@@ -150,7 +150,7 @@
                 "WS2012R2": "ami-d6c785ba"
             },
             "us-east-1": {
-                "US1404HVM": "ami-40d28157",
+                "US1404HVM": "ami-41e0b93b",
                 "WS2012R2": "ami-013e197b"
             },
             "us-east-2": {
@@ -355,15 +355,18 @@
                                         "",
                                         [
                                             "#!/bin/bash\n",
+                                            "hostname puppet.example.com\n",
+                                            {
+                                                "Fn::Sub": "echo '${PuppetAMasterIP} puppet.example.com' >> /etc/hosts\n"
+                                            },
+                                            {
+                                                "Fn::Sub": "echo '${PuppetAgentLinuxIP} linuxagent.example.com' >> /etc/hosts\n"
+                                            },
                                             "apt-get update\n",
-                                            "apt-get install oracle-java8-installer\n",
                                             "wget https://apt.puppetlabs.com/puppet5-release-xenial.deb\n",
                                             "dpkg -i puppet5-release-xenial.deb\n",
                                             "apt-get update\n",
                                             "apt-get install -y puppetserver\n",
-                                            "apt-get install -y git\n",
-                                            "iptables -I INPUT -m state --state NEW -m tcp -p tcp --dport 8140 -j ACCEPT\n",
-                                            "sed -i 's/2g/512m/g'  /etc/default/puppetserver\n",
                                             "echo 'certname=puppet.example.com' >> /etc/puppetlabs/puppet/puppet.conf\n",
                                             "systemctl start puppetserver\n",
                                             "systemctl enable puppetserver\n"
@@ -403,7 +406,7 @@
                         "US1404HVM"
                     ]
                 },
-                "InstanceType": "t2.micro",
+                "InstanceType": "t2.medium",
                 "NetworkInterfaces": [
                     {
                         "DeleteOnTermination": "true",
@@ -450,9 +453,7 @@
                             "",
                             [
                                 "#!/bin/bash -e\n",
-                                "export LC_ALL=C\n",
-                                "export PATH=/usr/local/bin:$PATH\n",
-                                "hostname puppet.example.com\n",
+                                "export PATH=/opt/puppetlabs/bin:$PATH\n",
                                 "apt-get update\n",
                                 "apt-get install -y python-pip\n",
                                 "pip install awscli\n",
@@ -461,11 +462,11 @@
                                 "pip install pyopenssl ndg-httpsclient pyasn1\n",
                                 "easy_install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz\n",
                                 {
-                                    "Fn::Sub": "aws s3 cp s3://${BucketName}/${KeyPrefix}/scripts/site.pp /etc/puppet/manifests/site.pp --region ${AWS::Region}\n"
+                                    "Fn::Sub": "aws s3 cp s3://${BucketName}/${KeyPrefix}/scripts/site.pp /etc/puppetlabs/code/environments/production/manifests/site.pp --region ${AWS::Region}\n"
                                 },
-                                "mkdir -p /etc/puppet/modules/lampserver/manifests\n",
+                                "mkdir -p /etc/puppetlabs/code/environments/productionmodules/lampserver/manifests\n",
                                 {
-                                    "Fn::Sub": "aws s3 cp s3://${BucketName}/${KeyPrefix}/scripts/lampserver/init.pp /etc/puppet/modules/lampserver/manifests/init.pp --region ${AWS::Region}\n"
+                                    "Fn::Sub": "aws s3 cp s3://${BucketName}/${KeyPrefix}/scripts/lampserver/init.pp /etc/puppetlabs/code/environments/production/modules/lampserver/manifests/init.pp --region ${AWS::Region}\n"
                                 },
                                 {
                                     "Fn::Sub": "/usr/local/bin/cfn-init -v --stack ${AWS::StackName} --resource PuppetMaster -c SetupConfig --region ${AWS::Region}\n"
@@ -575,25 +576,18 @@
                                         "",
                                         [
                                             "#!/bin/bash\n",
-                                            "export PATH=/usr/local/bin:$PATH\n",
-                                            "sed -i 's/.*DPkg/#&/' /etc/apt/apt.conf.d/70debconf\n",
                                             "hostname linuxagent.example.com\n",
+                                            {
+                                                "Fn::Sub": "echo '${PuppetMasterIP} puppet.example.com' >> /etc/hosts\n"
+                                            },
                                             "apt-get update\n",
-                                            "apt-get install oracle-java8-installer\n",
                                             "wget https://apt.puppetlabs.com/puppet5-release-xenial.deb\n",
                                             "dpkg -i puppet5-release-xenial.deb\n",
                                             "apt-get update\n",
                                             "apt-get install -y puppet-agent\n",
-                                            "apt-get install -y git\n",
-                                            "apt-get install -y docker\n",
-                                            {
-                                                "Fn::Sub": "echo '${PuppetMasterIP} puppet.example.com puppet' >> /etc/hosts\n"
-                                            },
                                             "echo 'server=puppet.example.com' >> /etc/puppetlabs/puppet/puppet.conf\n",
-                                            "echo 'certname=linuxagent.example.com' >> /etc/puppetlabs/puppet/puppet.conf\n",
-                                            "systemctl start puppet\n",
-                                            "systemctl enable puppet\n",
-                                            "puppet resource cron puppet-agent ensure=present user=root minute=30 command='/usr/bin/puppet agent --onetime --no-daemonize --splay'\n"
+                                            "puppet resource service puppet ensure=running enable=true\n",
+                                            "puppet agent --test\n"
                                         ]
                                     ]
                                 },
@@ -627,7 +621,7 @@
                         "US1404HVM"
                     ]
                 },
-                "InstanceType": "t2.micro",
+                "InstanceType": "t2.medium",
                 "NetworkInterfaces": [
                     {
                         "DeleteOnTermination": "true",
@@ -665,6 +659,7 @@
                             "",
                             [
                                 "#!/bin/bash -xe\n",
+                                "export PATH=/opt/puppetlabs/bin:$PATH\n",
                                 "apt-get update\n",
                                 "apt-get -y install python-setuptools\n",
                                 "apt-get install -y python-pip libssl-dev libffi-dev\n",
@@ -688,7 +683,10 @@
                                 "/etc/init.d/update-rc.d cfn-hup defaults\n",
                                 "chmod +x /etc/init.d/cfn-hup\n",
                                 "systemctl enable cfn-hup\n",
-                                "cfn-hup -v || error_exit\n"
+                                "cfn-hup -v || error_exit\n",
+                                {
+                                    "Fn::Sub": "/usr/local/bin/cfn-signal -e $? '${PuppetWaitConditionHandle}' >> /tmp/userdata.log\n"
+                                }
                             ]
                         ]
                     }
