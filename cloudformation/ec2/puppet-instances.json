@@ -355,27 +355,23 @@
                                         "",
                                         [
                                             "#!/bin/bash\n",
-                                            "hostname puppet.example.com\n",
-                                            {
-                                                "Fn::Sub": "echo '${PuppetAMasterIP} puppet.example.com' >> /etc/hosts\n"
-                                            },
+                                            "sudo hostname puppet.example.com\n",
                                             {
                                                 "Fn::Sub": "echo '${PuppetAgentLinuxIP} linuxagent.example.com' >> /etc/hosts\n"
                                             },
-                                            "apt-get update\n",
+                                            "sudo apt-get update\n",
                                             "wget https://apt.puppetlabs.com/puppet5-release-xenial.deb\n",
-                                            "dpkg -i puppet5-release-xenial.deb\n",
-                                            "apt-get update\n",
-                                            "apt-get install -y puppetserver\n",
-                                            "echo 'certname=puppet.example.com' >> /etc/puppetlabs/puppet/puppet.conf\n",
-                                            "systemctl start puppetserver\n",
-                                            "systemctl enable puppetserver\n"
+                                            "sudo dpkg -i puppet5-release-xenial.deb\n",
+                                            "sudo apt-get update\n",
+                                            "sudo apt-get install -y puppetserver\n",
+                                            "sudo systemctl start puppetserver\n",
+                                            "sudo systemctl enable puppetserver\n"
                                         ]
                                     ]
                                 },
                                 "mode": "000755",
-                                "owner": "root",
-                                "group": "root"
+                                "owner": "ubuntu",
+                                "group": "ubuntu"
                             }
                         },
                         "commands": {
@@ -576,24 +572,24 @@
                                         "",
                                         [
                                             "#!/bin/bash\n",
-                                            "hostname linuxagent.example.com\n",
+                                            "sudo hostname linuxagent.example.com\n",
                                             {
-                                                "Fn::Sub": "echo '${PuppetMasterIP} puppet.example.com' >> /etc/hosts\n"
+                                                "Fn::Sub": "echo '${PuppetMasterIP} puppet.example.com puppet' >> /etc/hosts\n"
                                             },
-                                            "apt-get update\n",
+                                            "sudo apt-get update\n",
                                             "wget https://apt.puppetlabs.com/puppet5-release-xenial.deb\n",
-                                            "dpkg -i puppet5-release-xenial.deb\n",
-                                            "apt-get update\n",
-                                            "apt-get install -y puppet-agent\n",
-                                            "echo 'server=puppet.example.com' >> /etc/puppetlabs/puppet/puppet.conf\n",
-                                            "puppet resource service puppet ensure=running enable=true\n",
-                                            "puppet agent --test\n"
+                                            "sudo dpkg -i puppet5-release-xenial.deb\n",
+                                            "sudo apt-get update\n",
+                                            "sudo apt-get install -y puppet-agent\n",
+                                            "echo 'server=puppet' >> /etc/puppetlabs/puppet/puppet.conf\n",
+                                            "sudo /opt/puppetlabs/puppet resource service puppet ensure=running enable=true\n",
+                                            "sudo /opt/puppetlabs/puppet agent --test\n"
                                         ]
                                     ]
                                 },
                                 "mode": "000755",
-                                "owner": "root",
-                                "group": "root"
+                                "owner": "ubuntu",
+                                "group": "ubuntu"
                             }
                         },
                         "commands": {
