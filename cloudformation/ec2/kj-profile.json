@@ -182,6 +182,9 @@
                     "Fn::Sub": "https://s3.amazonaws.com/${BucketName}/${KeyPrefix}/ecs-asg.json"
                 },
                 "Parameters": {
+                    "KeyPairName": {
+                        "Ref": "KeyPairName"
+                    },
                     "VpcId": {
                         "Fn::GetAtt": [
                             "VPCStack",
@@ -191,7 +194,7 @@
                     "PuppetMasterIP": {
                         "Ref": "PuppetMasterIP"
                     },
-                    "DockerImageURL": "130809186867.dkr.ecr.us-east-1.amazonaws.com/kjenkins1914/kj-profile",
+                    "DockerImageURL": "130809186867.dkr.ecr.us-east-1.amazonaws.com/kjenkins1914/kj-profile:latest",
                     "SubnetIDs": {
                         "Fn::GetAtt": [
                             "VPCStack",
