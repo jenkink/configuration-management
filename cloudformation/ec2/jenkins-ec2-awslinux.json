@@ -1,0 +1,341 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Template to create ec2 instances",
+    "Parameters": {
+        "KeyName": {
+            "Type": "AWS::EC2::KeyPair::KeyName",
+            "Description": "Name of an existing EC2 KeyPair. Instances will launch with this KeyPair."
+        },
+        "VPC": {
+            "Type": "AWS::EC2::VPC::Id",
+            "Description": "VPC-ID of your existing Virtual Private Cloud (VPC) where you want to depoy.",
+            "AllowedPattern": "vpc-[0-9a-z]{8}"
+        },
+        "Subnet": {
+            "Type": "AWS::EC2::Subnet::Id",
+            "Description": "Subnet-ID the existing subnet in your VPC where you want to deploy.",
+            "AllowedPattern": "subnet-[0-9a-z]{8}"
+        },
+        "SecurityGroupId": {
+            "Type": "AWS::EC2::SecurityGroup::Id",
+            "Description": "Security group ID"
+        },
+        "EnvironmentType": {
+            "Description": "The environment type",
+            "Type": "String",
+            "Default": "dev",
+            "AllowedValues": [
+                "prod",
+                "qa",
+                "dev"
+            ],
+            "ConstraintDescription": "must be a prod, qa or dev"
+        },
+        "InstanceType": {
+            "Description": "Jenkins Node EC2 instance type",
+            "Type": "String",
+            "Default": "t2.micro",
+            "AllowedValues": [
+                "t2.micro",
+                "m1.small",
+                "m1.medium",
+                "m1.large",
+                "m1.xlarge",
+                "m2.xlarge",
+                "m2.2xlarge",
+                "m2.4xlarge",
+                "m3.medium",
+                "m3.xlarge",
+                "c4.xlarge",
+                "c4.4xlarge",
+                "m3.2xlarge",
+                "c1.medium",
+                "c1.xlarge",
+                "cc1.4xlarge",
+                "c4.large",
+                "cc2.8xlarge",
+                "cg1.4xlarge"
+            ],
+            "ConstraintDescription": "must be a valid EC2 instance type."
+        },
+        "Name": {
+            "Description": "Name of the agent",
+            "Type": "String",
+            "MinLength": "1",
+            "Default": "jenkins-node"
+        }
+    },
+    "Mappings": {
+        "RegionMap": {
+            "us-east-1": {
+                "prod": "",
+                "test": "",
+                "qa": ""
+            },
+            "us-west-1": {
+                "prod": "",
+                "test": "",
+                "qa": ""
+            },
+            "us-west-2": {
+                "prod": "",
+                "test": "",
+                "qa": ""
+            },
+            "eu-west-1": {
+                "prod": "",
+                "test": "",
+                "qa": ""
+            },
+            "sa-east-1": {
+                "prod": "",
+                "test": "",
+                "qa": ""
+            },
+            "ap-southeast-1": {
+                "prod": "",
+                "test": "",
+                "qa": ""
+            },
+            "ap-southeast-2": {
+                "prod": "",
+                "test": "",
+                "qa": ""
+            },
+            "ap-northeast-1": {
+                "prod": "",
+                "test": "",
+                "qa": ""
+            }
+        }
+    },
+    "Resources": {
+        "JenkinsAgentRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowEc2ServiceToAssumeRole",
+                            "Effect": "Allow",
+                            "Action": [
+                                "sts:AssumeRole"
+                            ],
+                            "Principal": {
+                                "Service": [
+                                    "ec2.amazonaws.com"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "S3Policy": {
+            "Type": "AWS::IAM::Policy",
+            "Properties": {
+                "PolicyName": "S3Policy",
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "s3:ListBucket",
+                                "s3:ListBucketVersions",
+                                "s3:GetObject",
+                                "s3:GetObjectVersion",
+                                "s3:PutObject",
+                                "s3:DeleteObject"
+                            ],
+                            "Resource": "arn:aws:s3:::*"
+                        }
+                    ]
+                },
+                "Roles": [
+                    {
+                        "Ref": "JenkinsAgentRole"
+                    }
+                ]
+            }
+        },
+        "InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "Path": "/",
+                "Roles": [
+                    {
+                        "Ref": "JenkinsAgentRole"
+                    }
+                ]
+            }
+        },
+        "JenkinsNode": {
+            "Type": "AWS::EC2::Instance",
+            "Metadata": {
+                "AWS::CloudFormation::Init": {
+                    "configSets": {
+                        "InstallAndRun": [
+                            "Install",
+                            "Configure"
+                        ]
+                    },
+                    "Install": {
+                        "packages": {
+                            "yum": {}
+                        },
+                        "files": {
+                            "/etc/cfn/cfn-hup.conf": {
+                                "content": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "[main]\n",
+                                            "stack=",
+                                            {
+                                                "Ref": "AWS::StackId"
+                                            },
+                                            "\n",
+                                            "region=",
+                                            {
+                                                "Ref": "AWS::Region"
+                                            },
+                                            "\n"
+                                        ]
+                                    ]
+                                },
+                                "mode": "000400",
+                                "owner": "root",
+                                "group": "root"
+                            },
+                            "/etc/cfn/hooks.d/cfn-auto-reloader.conf": {
+                                "content": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "[cfn-auto-reloader-hook]\n",
+                                            "triggers=post.update\n",
+                                            "path=Resources.JenkinsNode.Metadata.AWS::CloudFormation::Init\n",
+                                            "action=/opt/aws/bin/cfn-init -v ",
+                                            "         --stack ",
+                                            {
+                                                "Ref": "AWS::StackName"
+                                            },
+                                            "         --resource JenkinsNode ",
+                                            "         --configsets InstallAndRun ",
+                                            "         --region ",
+                                            {
+                                                "Ref": "AWS::Region"
+                                            },
+                                            "\n",
+                                            "runas=root\n"
+                                        ]
+                                    ]
+                                }
+                            }
+                        },
+                        "services": {
+                            "sysvinit": {
+                                "cfn-hup": {
+                                    "enabled": "true",
+                                    "ensureRunning": "true",
+                                    "files": [
+                                        "/etc/cfn/cfn-hup.conf",
+                                        "/etc/cfn/hooks.d/cfn-auto-reloader.conf"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "Configure": {
+                        "commands": {
+                            "01_command": {
+                                "command": {},
+                                "test": {}
+                            }
+                        }
+                    }
+                },
+                "Properties": {
+                    "InstanceType": {
+                        "Ref": "InstanceType"
+                    },
+                    "ImageId": {
+                        "Fn::FindInMap": [
+                            "RegionAndInstanceTypeToAMIID",
+                            {
+                                "Ref": "AWS::Region"
+                            },
+                            {
+                                "Ref": "EnvironmentType"
+                            }
+                        ]
+                    },
+                    "KeyName": {
+                        "Ref": "KeyName"
+                    },
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "SecurityGroupId"
+                        }
+                    ],
+                    "SubnetId": {
+                        "Ref": "Subnet"
+                    },
+                    "IamInstanceProfile": {
+                        "Ref": "InstanceProfile"
+                    },
+                    "Tags": [
+                        {
+                            "Key": "Name",
+                            "Value": {
+                                "Ref": "Name"
+                            }
+                        },
+                        {
+                            "Key": "environment",
+                            "Value": "staging"
+                        }
+                    ],
+                    "UserData": {
+                        "Fn::Base64": {
+                            "Fn::Join": [
+                                "",
+                                [
+                                    "#!/bin/bash -xe\n",
+                                    "yum update aws-cfn-bootstrap\n",
+                                    "# Install the files and packages from the metadata\n",
+                                    "/opt/aws/bin/cfn-init ",
+                                    "         --stack ",
+                                    {
+                                        "Ref": "AWS::StackName"
+                                    },
+                                    "         --resource WebServerInstance ",
+                                    "         --configsets JenkinsNode ",
+                                    "         --region ",
+                                    {
+                                        "Ref": "AWS::Region"
+                                    },
+                                    "\n",
+                                    "# Signal the status from cfn-init\n",
+                                    "/opt/aws/bin/cfn-signal -e $? ",
+                                    "         --stack ",
+                                    {
+                                        "Ref": "AWS::StackName"
+                                    },
+                                    "         --resource JenkinsNode ",
+                                    "         --region ",
+                                    {
+                                        "Ref": "AWS::Region"
+                                    },
+                                    "\n"
+                                ]
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
